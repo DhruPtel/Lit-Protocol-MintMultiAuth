@@ -88,7 +88,7 @@ export const authGoogleTest = async () => {
   });
   //Setup the authentication method
   const googleProvider = litAuthClient.initProvider<GoogleProvider>(
-    //specify the type is google
+  //specify the type is google
         ProviderType.Google
     );
 
@@ -135,6 +135,7 @@ export const mintMulti = async () => {
     const data2 = localStorage.getItem('discord');
     const discordAuthMethod = JSON.parse(String(data2));
     console.log(discordAuthMethod)
+
     //Await #2
     await litContractsClient.connect();
   //connection to functions/contracts/manipulatons
@@ -159,9 +160,9 @@ export const mintMulti = async () => {
   
     // Returns ethereum / private key address minted with, a signature
     console.log("capacityDelegationAuthSig:", capacityDelegationAuthSig);
-  
+// 
   //Minting a PKP
-    const googleAuthMethodOwnedPkp = await litAuthClient.mintPKPWithAuthMethods(
+    const googlediscordAuthMethodOwnedPkp = await litAuthClient.mintPKPWithAuthMethods(
       [JSON.parse(String(data)), JSON.parse(String(data2))],
       {
         pkpPermissionScopes: [[AuthMethodScope.SignAnything], [AuthMethodScope.SignAnything]],  // PKP Permission Scopes
@@ -170,8 +171,50 @@ export const mintMulti = async () => {
       }
     )
 
-    console.log(googleAuthMethodOwnedPkp);
+    console.log(googlediscordAuthMethodOwnedPkp);
 
+    console.log("✅ Signing With Google Auth");
+    const googlesessionSigs = await litNodeClient.getSessionSigs({
+      resourceAbilityRequests: [
+        {
+          resource: new LitPKPResource("*"),
+          ability: LitAbility.PKPSigning,
+        },
+        {
+          resource: new LitActionResource("*"),
+          ability: LitAbility.LitActionExecution,
+        },
+      ],
+      capacityDelegationAuthSig: capacityDelegationAuthSig,
+      authNeededCallback: async (props: AuthCallbackParams) => {
+        console.log("authNeededCallback props:", props);
+
+        const response = await litNodeClient.signSessionKey({
+          sessionKey: props.sessionKey,
+          statement: props.statement || "Some custom statement.",
+          authMethods: [JSON.parse(String(data2))], //can use either googleauthmethod or discord authmethod to sign with public key.
+          pkpPublicKey: googlediscordAuthMethodOwnedPkp.pkpPublicKey,
+          expiration: props.expiration,
+          resources: props.resources,
+          chainId: 1,
+          resourceAbilityRequests: props.resourceAbilityRequests,
+        });
+
+        return response.authSig;
+      },
+    });
+    console.log("✅ sessionSigs:", googlesessionSigs);
+    /**
+     * ========== pkp sign  ==========
+     */
+    console.log("PKP Signing...");
+    const googlepkpRes = await litNodeClient.pkpSign({
+      sessionSigs: googlesessionSigs,
+      pubKey: googlediscordAuthMethodOwnedPkp.pkpPublicKey as string,
+      toSign: ethers.utils.arrayify(ethers.utils.keccak256([1, 2, 3, 4, 5])),
+    });
+
+    console.log(googlepkpRes);
 }
 
 
